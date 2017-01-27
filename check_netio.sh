@@ -125,7 +125,7 @@ fi
 
 
 # Do the do
-if [ -n $ELVERSION ] && [ $ELVERSION -ge 7 ]; then
+if [ $ELVERSION -ge 7 ]; then
   # ifconfig output is different since EL7
   BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'RX packets' | awk '{print $5}'`
   BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'TX packets' | awk '{print $5}'`
