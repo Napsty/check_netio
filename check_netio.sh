@@ -14,6 +14,7 @@
 # Created: 2007-09-06 (i.yates@uea.ac.uk)
 # Updated: 2007-09-06 (i.yates@uea.ac.uk)
 # Updated: 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
+# Updated: 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -111,10 +112,27 @@ theend() {
 # Handle command line options
 doopts $@
 
-# Do the do
+# Verify that interface exists
+if ! [ -L /sys/class/net/$INTERFACE ]; then
+ RESULT="NETIO UNKNOWN - No interface $INTERFACE found"; EXIT_STATUS=3
+ theend
+fi 
 
-BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f2 | $CUT -d" " -f1`
-BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f3 | $CUT -d" " -f1`
+# Detect Distribution
+if [ -f /etc/redhat-release ]; then 
+  ELVERSION=$(uname -r | sed "s/.*\.el\([1-9]*\)\.x86_64/\1/")
+fi
+
+
+# Do the do
+if [ -n $ELVERSION ] && [ $ELVERSION -ge 7 ]; then
+  # ifconfig output is different since EL7
+  BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'RX packets' | awk '{print $5}'`
+  BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'TX packets' | awk '{print $5}'`
+else 
+  BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f2 | $CUT -d" " -f1`
+  BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f3 | $CUT -d" " -f1`
+fi
 
 RESULT="NETIO OK - $INTERFACE: RX=$BYTES_RX, TX=$BYTES_TX|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;;"
 
