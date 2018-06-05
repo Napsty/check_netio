@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 ###############################################
 #
 # Nagios script to check network I/O status
@@ -15,6 +15,7 @@
 # Updated: 2007-09-06 (i.yates@uea.ac.uk)
 # Updated: 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
 # Updated: 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
+# Updated: 2018-06-05 (www.claudiokuenzler.com) - Added validation checks and compatibility with Ubuntu 18.04
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -118,20 +119,39 @@ if ! [ -L /sys/class/net/$INTERFACE ]; then
  theend
 fi 
 
-# Detect Distribution
-if [ -f /etc/redhat-release ]; then 
-  ELVERSION=$(uname -r | sed "s/.*\.el\([1-9]*\)\.x86_64/\1/")
-fi
+# Get the full ifconfig output from the selected interface
+IFCONFIG_FULL=`$IFCONFIG $INTERFACE`
 
+# Check what kind of ifconfig response we get. Here are a few examples.
+#
+# Typical Linux 20?? - 2017:
+#eth0      Link encap:Ethernet  HWaddr 00:50:56:99:35:34
+#          inet addr:10.161.204.204  Bcast:10.161.204.255  Mask:255.255.255.0
+#          inet6 addr: fe80::250:56ff:fe99:3534/64 Scope:Link
+#          UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+#          RX packets:13244146360 errors:0 dropped:47729 overruns:0 frame:0
+#          TX packets:12690444622 errors:0 dropped:0 overruns:0 carrier:0
+#          collisions:0 txqueuelen:1000
+#          RX bytes:10473813937684 (10.4 TB)  TX bytes:1956197200532 (1.9 TB)
+#
+# Starting in 2017, first seen in RHEL/Centos 7:
+#eno16777984: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+#        inet 10.162.215.71  netmask 255.255.255.0  broadcast 10.162.215.255
+#        inet6 fe80::250:56ff:fe8d:5c15  prefixlen 64  scopeid 0x20<link>
+#        ether 00:50:56:8d:5c:15  txqueuelen 1000  (Ethernet)
+#        RX packets 1419523582  bytes 5884437221627 (5.3 TiB)
+#        RX errors 0  dropped 130904  overruns 0  frame 0
+#        TX packets 771824547  bytes 252382597591 (235.0 GiB)
+#        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 
-# Do the do
-if [ $ELVERSION -ge 7 ]; then
-  # ifconfig output is different since EL7
-  BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'RX packets' | awk '{print $5}'`
-  BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'TX packets' | awk '{print $5}'`
-else 
-  BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f2 | $CUT -d" " -f1`
-  BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f3 | $CUT -d" " -f1`
+if [[ -n $(echo $IFCONFIG_FULL | grep "RX packets:") ]]; then
+	# This is the old ifconfig output
+	BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f2 | $CUT -d" " -f1`
+  	BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f3 | $CUT -d" " -f1`
+else
+	# This is the new ifconfig output 2017 and newer
+	BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'RX packets' | awk '{print $5}'`
+	BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'TX packets' | awk '{print $5}'`
 fi
 
 RESULT="NETIO OK - $INTERFACE: RX=$BYTES_RX, TX=$BYTES_TX|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;;"
