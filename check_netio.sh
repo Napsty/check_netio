@@ -16,7 +16,7 @@
 # Updated: 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
 # Updated: 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
 # Updated: 2018-06-05 (www.claudiokuenzler.com) - Added validation checks and compatibility with Ubuntu 18.04
-# Updated: 2018-08-14 (www.claudiokuenzler.com) - Set LC_LANG to English for correct persing
+# Updated: 2018-08-14 (www.claudiokuenzler.com) - Set LANG to English for correct persing
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
