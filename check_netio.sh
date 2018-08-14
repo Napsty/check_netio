@@ -3,7 +3,8 @@
 #
 # Nagios script to check network I/O status
 #
-# Copyright 2007, 2008 Ian Yates
+# Copyright 2007-008 Ian Yates
+# Copyright 2017-2018 Claudio Kuenzler
 #
 # See usage for command line switches
 #
