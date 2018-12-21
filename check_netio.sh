@@ -3,7 +3,7 @@
 #
 # Nagios script to check network I/O status
 #
-# Copyright 2007-008 Ian Yates
+# Copyright 2007-2008 Ian Yates
 # Copyright 2017-2018 Claudio Kuenzler
 #
 # See usage for command line switches
@@ -12,12 +12,16 @@
 #       Consequently, this check plugin always returns OK.
 #       This plugin is a means of returning stats to nagios for graphing (recommend DERIVE graph in RRD)
 #
-# Created: 2007-09-06 (i.yates@uea.ac.uk)
-# Updated: 2007-09-06 (i.yates@uea.ac.uk)
-# Updated: 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
-# Updated: 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
-# Updated: 2018-06-05 (www.claudiokuenzler.com) - Added validation checks and compatibility with Ubuntu 18.04
-# Updated: 2018-08-14 (www.claudiokuenzler.com) - Set LANG to English for correct persing
+# History: 
+# 2007-09-06 (i.yates@uea.ac.uk) - Created
+# 2007-09-06 (i.yates@uea.ac.uk)
+# 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
+# 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
+# 2018-06-05 (www.claudiokuenzler.com) - Added validation checks and compatibility with Ubuntu 18.04
+# 2018-08-14 (www.claudiokuenzler.com) - Set LANG to English for correct persing
+# 2018-12-21 (www.claudiokuenzler.com) - Use /proc/net/dev instead of ifconfig (use -l for legacy)
+# 2018-12-21 (www.claudiokuenzler.com) - Remove verbose mode (it was never implemented anyway)
+# 2018-12-21 (www.claudiokuenzler.com) - Change default exit code to UNKNOWN
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,34 +41,31 @@
 . /usr/lib/nagios/plugins/utils.sh
 
 
-VERSION="1.1"
+VERSION="1.2"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
 CUT=/usr/bin/cut
 
-FLAG_VERBOSE=FALSE
 INTERFACE=""
 LEVEL_WARN="0"
 LEVEL_CRIT="0"
 RESULT=""
-EXIT_STATUS=$STATE_OK
+EXIT_STATUS=$STATE_UNKNOWN
+USE_IFCONFIG=false
 
 export LANG=en_EN.UTF-8 # We need ifconfig in English
-
 ###############################################
-#
 ## FUNCTIONS
-#
 
 ## Print usage
 usage() {
-        echo " check_netio $VERSION - Nagios network I/O check script"
+        echo " check_netio $VERSION - Monitoring plugin to check network I/O"
         echo ""
-        echo " Usage: check_netio {-i} [ -v ] [ -h ]"
+        echo " Usage: check_netio -i INTERFACE [ -v ] [ -h ]"
         echo ""
         echo "           -i  Interface to check (e.g. eth0)"
-        echo "           -v  Verbose output (ignored for now)"
+	echo "           -l  Use legacy mode (use ifconfig command)"
         echo "           -h  Show this page"
         echo ""
 }
@@ -73,7 +74,7 @@ usage() {
 doopts() {
         if ( `test 0 -lt $#` )
         then
-                while getopts i:vh myarg "$@"
+                while getopts i:lh myarg "$@"
                 do
                         case $myarg in
                                 h|\?)
@@ -81,8 +82,8 @@ doopts() {
                                         exit;;
                                 i)
                                         INTERFACE=$OPTARG;;
-                                v)
-                                        FLAG_VERBOSE=TRUE;;
+                                l)
+                                        USE_IFCONFIG=true;;
                                 *)      # Default
                                         usage
                                         exit;;
@@ -102,28 +103,28 @@ theend() {
 }
 
 
-#
 ## END FUNCTIONS
-#
-
 #############################################
-#
 ## MAIN
-#
-
 
 # Handle command line options
 doopts $@
+
+# Get the full output from /proc/net/dev
+INTERFACES_FULL="`cat /proc/net/dev`"
 
 # Verify that interface exists
 if ! [ -L /sys/class/net/$INTERFACE ]; then
  RESULT="NETIO UNKNOWN - No interface $INTERFACE found"; EXIT_STATUS=3
  theend
-fi 
+fi
 
-# Get the full ifconfig output from the selected interface
-IFCONFIG_FULL=`$IFCONFIG $INTERFACE`
+if [ $USE_IFCONFIG = true ]; then
+  # Get the full ifconfig output from the selected interface
+  IFCONFIG_FULL=`$IFCONFIG $INTERFACE`
+fi
 
+# For legacy reasons we keep this information here:
 # Check what kind of ifconfig response we get. Here are a few examples.
 #
 # Typical Linux 20?? - 2017:
@@ -146,14 +147,21 @@ IFCONFIG_FULL=`$IFCONFIG $INTERFACE`
 #        TX packets 771824547  bytes 252382597591 (235.0 GiB)
 #        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 
-if [[ -n $(echo $IFCONFIG_FULL | grep "RX packets:") ]]; then
+if [ $USE_IFCONFIG = true ]; then 
+  # So user dediced to use ifconfig
+  if [[ -n $(echo $IFCONFIG_FULL | grep "RX packets:") ]]; then
 	# This is the old ifconfig output
 	BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f2 | $CUT -d" " -f1`
   	BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $CUT -d":" -f3 | $CUT -d" " -f1`
-else
+  else
 	# This is the new ifconfig output 2017 and newer
 	BYTES_RX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'RX packets' | awk '{print $5}'`
 	BYTES_TX=`$IFCONFIG $INTERFACE | $GREP 'bytes' | $GREP 'TX packets' | awk '{print $5}'`
+  fi
+else
+  # Hurray, we directly parse the /proc/net/dev output and save time
+  BYTES_RX=$(awk "/${INTERFACE}:/ {print \$2}" /proc/net/dev) 
+  BYTES_TX=$(awk "/${INTERFACE}:/ {print \$10}" /proc/net/dev) 
 fi
 
 RESULT="NETIO OK - $INTERFACE: RX=$BYTES_RX, TX=$BYTES_TX|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;;"
