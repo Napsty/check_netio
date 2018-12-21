@@ -1,16 +1,11 @@
 #!/bin/bash
-###############################################
-#
-# Nagios script to check network I/O status
+###############################################################
+# Monitoring plugin to check network I/O status
 #
 # Copyright 2007-2008 Ian Yates
 # Copyright 2017-2018 Claudio Kuenzler
 #
 # See usage for command line switches
-#
-# NOTE: Because of the method of gathering information, bytes/s values are calculated here, so no wanring/critical values can be set to trigger.
-#       Consequently, this check plugin always returns OK.
-#       This plugin is a means of returning stats to nagios for graphing (recommend DERIVE graph in RRD)
 #
 # History: 
 # 2007-09-06 (i.yates@uea.ac.uk) - Created
@@ -22,6 +17,7 @@
 # 2018-12-21 (www.claudiokuenzler.com) - Use /proc/net/dev instead of ifconfig (use -l for legacy)
 # 2018-12-21 (www.claudiokuenzler.com) - Remove verbose mode (it was never implemented anyway)
 # 2018-12-21 (www.claudiokuenzler.com) - Change default exit code to UNKNOWN
+# 2018-12-21 (www.claudiokuenzler.com) - Remove dependency to (nagios|monitoring)-plugins-common
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,13 +31,8 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-###############################################
-
-. /usr/lib/nagios/plugins/utils.sh
-
-
-VERSION="1.2"
+###############################################################
+VERSION="1.3"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
@@ -51,11 +42,11 @@ INTERFACE=""
 LEVEL_WARN="0"
 LEVEL_CRIT="0"
 RESULT=""
-EXIT_STATUS=$STATE_UNKNOWN
+EXIT_STATUS=3
 USE_IFCONFIG=false
 
 export LANG=en_EN.UTF-8 # We need ifconfig in English
-###############################################
+###############################################################
 ## FUNCTIONS
 
 ## Print usage
@@ -95,16 +86,13 @@ doopts() {
         fi
 }
 
-
 # Write output and return result
 theend() {
         echo $RESULT
         exit $EXIT_STATUS
 }
-
-
 ## END FUNCTIONS
-#############################################
+###############################################################
 ## MAIN
 
 # Handle command line options
