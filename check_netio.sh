@@ -13,7 +13,7 @@
 # 2008-11-27 (i.yates@uea.ac.uk) - Added GPLv3 licence
 # 2017-01-27 (www.claudiokuenzler.com) - Added validation checks and compatibility with CentOS/RHEL 7
 # 2018-06-05 (www.claudiokuenzler.com) - Added validation checks and compatibility with Ubuntu 18.04
-# 2018-08-14 (www.claudiokuenzler.com) - Set LANG to English for correct persing
+# 2018-08-14 (www.claudiokuenzler.com) - Set LANG to English for correct parsing
 # 2018-12-21 (www.claudiokuenzler.com) - Use /proc/net/dev instead of ifconfig (use -l for legacy)
 # 2018-12-21 (www.claudiokuenzler.com) - Remove verbose mode (it was never implemented anyway)
 # 2018-12-21 (www.claudiokuenzler.com) - Change default exit code to UNKNOWN
