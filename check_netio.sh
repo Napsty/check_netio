@@ -165,6 +165,7 @@ else
 fi
 
 RESULT="NETIO OK - $INTERFACE: RX=$BYTES_RX, TX=$BYTES_TX|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;;"
+EXIT_STATUS=0
 
 # Quit and return information and exit status
 theend
