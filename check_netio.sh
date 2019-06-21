@@ -95,8 +95,7 @@ theend() {
 doopts $@
 
 # Get the full output from /proc/net/dev
-#INTERFACES_FULL="`cat /proc/net/dev`"
-INTERFACES_FULL="`cat /tmp/xxx`"
+INTERFACES_FULL="`cat /proc/net/dev`"
 
 # Verify that interface exists
 if ! [ -L /sys/class/net/$INTERFACE ]; then
