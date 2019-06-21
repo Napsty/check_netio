@@ -3,7 +3,7 @@
 # Monitoring plugin to check network I/O status
 #
 # Copyright 2007-2008 Ian Yates
-# Copyright 2017-2018 Claudio Kuenzler
+# Copyright 2017-2019 Claudio Kuenzler
 #
 # See usage for command line switches
 #
@@ -18,6 +18,7 @@
 # 2018-12-21 (www.claudiokuenzler.com) - Remove verbose mode (it was never implemented anyway)
 # 2018-12-21 (www.claudiokuenzler.com) - Change default exit code to UNKNOWN
 # 2018-12-21 (www.claudiokuenzler.com) - Remove dependency to (nagios|monitoring)-plugins-common
+# 2019-06-21 (www.claudiokuenzler.com) - Add interface error check (-e)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -32,7 +33,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################
-VERSION="1.3"
+VERSION="1.4"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
@@ -44,6 +45,8 @@ LEVEL_CRIT="0"
 RESULT=""
 EXIT_STATUS=3
 USE_IFCONFIG=false
+IFERRORS=false
+ERRORTMPFILE=/tmp/check_netio
 
 export LANG=en_EN.UTF-8 # We need ifconfig in English
 ###############################################################
@@ -51,45 +54,38 @@ export LANG=en_EN.UTF-8 # We need ifconfig in English
 
 ## Print usage
 usage() {
-        echo " check_netio $VERSION - Monitoring plugin to check network I/O"
-        echo ""
-        echo " Usage: check_netio -i INTERFACE [ -v ] [ -h ]"
-        echo ""
-        echo "           -i  Interface to check (e.g. eth0)"
-	echo "           -l  Use legacy mode (use ifconfig command)"
-        echo "           -h  Show this page"
-        echo ""
+  echo " check_netio $VERSION - Monitoring plugin to check network I/O"
+  echo ""
+  echo " Usage: check_netio -i INTERFACE [-l] [-e] [-h]"
+  echo ""
+  echo "           -i  Interface to check (e.g. eth0)"
+  echo "           -l  Use legacy mode (use ifconfig command)"
+  echo "           -e  Enable check of interface errors"
+  echo "           -h  Show this page"
+  echo ""
 }
 
 ## Process command line options
 doopts() {
-        if ( `test 0 -lt $#` )
-        then
-                while getopts i:lh myarg "$@"
-                do
-                        case $myarg in
-                                h|\?)
-                                        usage
-                                        exit;;
-                                i)
-                                        INTERFACE=$OPTARG;;
-                                l)
-                                        USE_IFCONFIG=true;;
-                                *)      # Default
-                                        usage
-                                        exit;;
-                        esac
-                done
-        else
-                usage
-                exit
-        fi
+if ( `test 0 -lt $#` ); then
+  while getopts i:leh myarg "$@"; do
+    case $myarg in
+    h|\?) usage; exit;;
+    i) INTERFACE=$OPTARG;;
+    l) USE_IFCONFIG=true;;
+    e) IFERRORS=true;;
+    *) usage; exit;;
+    esac
+  done
+else
+  usage; exit
+fi
 }
 
 # Write output and return result
 theend() {
-        echo $RESULT
-        exit $EXIT_STATUS
+  echo $RESULT
+  exit $EXIT_STATUS
 }
 ## END FUNCTIONS
 ###############################################################
@@ -115,7 +111,7 @@ fi
 # For legacy reasons we keep this information here:
 # Check what kind of ifconfig response we get. Here are a few examples.
 #
-# Typical Linux 20?? - 2017:
+# Typical Linux -2017:
 #eth0      Link encap:Ethernet  HWaddr 00:50:56:99:35:34
 #          inet addr:10.161.204.204  Bcast:10.161.204.255  Mask:255.255.255.0
 #          inet6 addr: fe80::250:56ff:fe99:3534/64 Scope:Link
@@ -148,12 +144,43 @@ if [ $USE_IFCONFIG = true ]; then
   fi
 else
   # Hurray, we directly parse the /proc/net/dev output and save time
-  BYTES_RX=$(awk "/${INTERFACE}:/ {print \$2}" /proc/net/dev) 
-  BYTES_TX=$(awk "/${INTERFACE}:/ {print \$10}" /proc/net/dev) 
+  BYTES_RX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$2}") 
+  ERRORS_RX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$4}") 
+  BYTES_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$10}") 
+  ERRORS_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$12}") 
 fi
 
-RESULT="NETIO OK - $INTERFACE: RX=$BYTES_RX, TX=$BYTES_TX|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;;"
-EXIT_STATUS=0
+# Handle interface errors
+if [ $IFERRORS = true ]; then
+  if [ -f ${ERRORTMPFILE}_${INTERFACE} ]; then 
+    # Oh, we already saw errors before, compare values
+    PREVIOUS_ERRORS_RX=$(tail -n 2 ${ERRORTMPFILE}_${INTERFACE} | awk "/ERRORS_RX/ {print \$3}")
+    PREVIOUS_ERRORS_TX=$(tail -n 2 ${ERRORTMPFILE}_${INTERFACE} | awk "/ERRORS_TX/ {print \$3}")
+    if [[ $ERRORS_RX -gt $PREVIOUS_ERRORS_RX || $ERRORS_TX -gt $PREVIOUS_ERRORS_TX ]]; then 
+      echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
+      echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      EXIT_STATUS=1
+    else
+      # output ok with hint that no change in error count
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      EXIT_STATUS=0
+    fi
+  else # Check if we got errors
+    if [[ $ERRORS_RX -gt 0 || $ERRORS_TX -gt 0 ]]; then
+      echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
+      echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      EXIT_STATUS=1
+    else
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      EXIT_STATUS=0
+    fi
+  fi
+else # No error handling, just output the stats
+  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+  EXIT_STATUS=0
+fi
 
 # Quit and return information and exit status
 theend
