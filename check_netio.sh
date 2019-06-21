@@ -159,26 +159,26 @@ if [ $IFERRORS = true ]; then
     if [[ $ERRORS_RX -gt $PREVIOUS_ERRORS_RX || $ERRORS_TX -gt $PREVIOUS_ERRORS_TX ]]; then 
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;;"
       EXIT_STATUS=1
     else
       # output ok with hint that no change in error count
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;;"
       EXIT_STATUS=0
     fi
   else # Check if we got errors
     if [[ $ERRORS_RX -gt 0 || $ERRORS_TX -gt 0 ]]; then
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;;"
       EXIT_STATUS=1
     else
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;;"
       EXIT_STATUS=0
     fi
   fi
 else # No error handling, just output the stats
-  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_IN=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_OUT=${ERRORS_TX};;;;"
+  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;;"
   EXIT_STATUS=0
 fi
 
