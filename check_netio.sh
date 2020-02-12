@@ -3,7 +3,7 @@
 # Monitoring plugin to check network I/O status
 #
 # Copyright 2007-2008 Ian Yates
-# Copyright 2017-2019 Claudio Kuenzler
+# Copyright 2017-2020 Claudio Kuenzler
 #
 # See usage for command line switches
 #
@@ -19,7 +19,7 @@
 # 2018-12-21 (www.claudiokuenzler.com) - Change default exit code to UNKNOWN
 # 2018-12-21 (www.claudiokuenzler.com) - Remove dependency to (nagios|monitoring)-plugins-common
 # 2019-06-21 (www.claudiokuenzler.com) - Add interface error check (-e)
-# 2020-02-12 (www.claudiokuenzler.com) - Add interface drops to performance data
+# 2020-02-12 (www.claudiokuenzler.com) - Add interface drops to performance data, add tcp stats option (-t)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -57,11 +57,12 @@ export LANG=en_EN.UTF-8 # We need ifconfig in English
 usage() {
   echo " check_netio $VERSION - Monitoring plugin to check network I/O"
   echo ""
-  echo " Usage: check_netio -i INTERFACE [-l] [-e] [-h]"
+  echo " USAGE: check_netio.sh -i INTERFACE [-l] [-e] [-t] [-h]"
   echo ""
   echo "           -i  Interface to check (e.g. eth0)"
   echo "           -l  Use legacy mode (use ifconfig command)"
   echo "           -e  Enable check of interface errors"
+  echo "           -t  Enable tcp statistics (system-wide, not limited to chosen interface)"
   echo "           -h  Show this page"
   echo ""
 }
@@ -69,12 +70,13 @@ usage() {
 ## Process command line options
 doopts() {
 if ( `test 0 -lt $#` ); then
-  while getopts i:leh myarg "$@"; do
+  while getopts i:leth myarg "$@"; do
     case $myarg in
     h|\?) usage; exit;;
     i) INTERFACE=$OPTARG;;
     l) USE_IFCONFIG=true;;
     e) IFERRORS=true;;
+    t) TCPSTATS=true;;
     *) usage; exit;;
     esac
   done
@@ -107,6 +109,11 @@ fi
 if [ $USE_IFCONFIG = true ]; then
   # Get the full ifconfig output from the selected interface
   IFCONFIG_FULL=`$IFCONFIG $INTERFACE`
+fi
+
+if [ $TCPSTATS = true ]; then
+  # Collect netstat stats
+  NETSTAT_FULL=`cat /proc/net/netstat`
 fi
 
 # For legacy reasons we keep this information here:
@@ -153,6 +160,19 @@ else
   DROPS_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$13}") 
 fi
 
+# Handle netstat stats
+if [ $TCPSTATS = true ]; then
+  IFS=' '
+  read -r -a key <<< `echo $NETSTAT_FULL|sed -ne "1p"`
+  read -r -a value <<< `echo $NETSTAT_FULL|sed -ne "2p"`
+  i=0
+  for key in ${key[*]}; do
+	 tcpperfdata[$i]="${key[$i]}=${value[$i]};;;; "
+	 let i++
+ done
+ else tcpperfdata=""
+fi
+
 # Handle interface errors
 if [ $IFERRORS = true ]; then
   if [ -f ${ERRORTMPFILE}_${INTERFACE} ]; then 
@@ -162,26 +182,26 @@ if [ $IFERRORS = true ]; then
     if [[ $ERRORS_RX -gt $PREVIOUS_ERRORS_RX || $ERRORS_TX -gt $PREVIOUS_ERRORS_TX ]]; then 
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;;"
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=1
     else
       # output ok with hint that no change in error count
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;;"
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=0
     fi
   else # Check if we got errors
     if [[ $ERRORS_RX -gt 0 || $ERRORS_TX -gt 0 ]]; then
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;;"
+      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=1
     else
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;;"
+      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=0
     fi
   fi
 else # No error handling, just output the stats
-  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;;"
+  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
   EXIT_STATUS=0
 fi
 
