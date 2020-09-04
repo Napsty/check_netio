@@ -21,6 +21,7 @@
 # 2019-06-21 (claudiokuenzler.com) - 1.4: Add interface error check (-e)
 # 2020-02-12 (claudiokuenzler.com) - 1.5: Add interface drops to performance data, add tcp stats option (-t)
 # 2020-02-13 (claudiokuenzler.com) - 1.5.1: Bugfix issue-6
+# 2020-09-04 (claudiokuenzler.com) - 1.5.2: Bugfix issue-9
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -35,7 +36,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################
-VERSION="1.5.1"
+VERSION="1.5.2"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
@@ -165,8 +166,8 @@ fi
 # Handle netstat stats
 if [ $TCPSTATS = true ]; then
   IFS=' '
-  read -r -a key <<< `echo $NETSTAT_FULL|sed -ne "1p"`
-  read -r -a value <<< `echo $NETSTAT_FULL|sed -ne "2p"`
+  read -r -a key <<< `echo $NETSTAT_FULL|sed -ne "1p"|$CUT -d ' ' -f 1 --complement`
+  read -r -a value <<< `echo $NETSTAT_FULL|sed -ne "2p"|$CUT -d ' ' -f 1 --complement`
   i=0
   for key in ${key[*]}; do
 	 tcpperfdata[$i]="${key[$i]}=${value[$i]};;;; "
