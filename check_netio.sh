@@ -22,6 +22,7 @@
 # 2020-02-12 (claudiokuenzler.com) - 1.5: Add interface drops to performance data, add tcp stats option (-t)
 # 2020-02-13 (claudiokuenzler.com) - 1.5.1: Bugfix issue-6
 # 2020-09-04 (claudiokuenzler.com) - 1.5.2: Bugfix issue-9
+# 2020-09-04 (claudiokuenzler.com) - 1.6: Allow regular expression lookup for tcp statistics
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,7 +37,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################
-VERSION="1.5.2"
+VERSION="1.6.0"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
@@ -58,14 +59,15 @@ export LANG=en_EN.UTF-8 # We need ifconfig in English
 
 ## Print usage
 usage() {
-  echo " check_netio $VERSION - Monitoring plugin to check network I/O"
+  echo " check_netio $VERSION - Monitoring plugin to check network interface and I/O"
   echo ""
-  echo " USAGE: check_netio.sh -i INTERFACE [-l] [-e] [-t] [-h]"
+  echo " USAGE: check_netio.sh -i INTERFACE [-l] [-e] [-t] [-r] [-h]"
   echo ""
   echo "           -i  Interface to check (e.g. eth0)"
   echo "           -l  Use legacy mode (use ifconfig command)"
   echo "           -e  Enable check of interface errors"
   echo "           -t  Enable tcp statistics (system-wide, not limited to chosen interface)"
+  echo "           -r  Comma-separated list of strings for regular expression lookup in tcp statistics (in combination with -t)"
   echo "           -h  Show this page"
   echo ""
 }
@@ -73,12 +75,13 @@ usage() {
 ## Process command line options
 doopts() {
 if ( `test 0 -lt $#` ); then
-  while getopts i:leth myarg "$@"; do
+  while getopts i:letr:h myarg "$@"; do
     case $myarg in
     h|\?) usage; exit;;
     i) INTERFACE=$OPTARG;;
     l) USE_IFCONFIG=true;;
     e) IFERRORS=true;;
+    r) REGEX=$OPTARG;;
     t) TCPSTATS=true;;
     *) usage; exit;;
     esac
@@ -170,7 +173,17 @@ if [ $TCPSTATS = true ]; then
   read -r -a value <<< `echo $NETSTAT_FULL|sed -ne "2p"|$CUT -d ' ' -f 1 --complement`
   i=0
   for key in ${key[*]}; do
-	 tcpperfdata[$i]="${key[$i]}=${value[$i]};;;; "
+         if [[ -n ${REGEX} ]]; then
+           declare -a regex_list=($(echo "$REGEX" | sed 's/,/ /g'))
+           shopt -s nocasematch
+           for regex in ${regex_list[*]}; do
+             if [[ ${key} =~ "${regex}" ]]; then
+	       tcpperfdata[$i]="${key[$i]}=${value[$i]};;;; "
+             fi
+           done
+         else
+	   tcpperfdata[$i]="${key[$i]}=${value[$i]};;;; "
+         fi
 	 let i++
  done
  else tcpperfdata=""
