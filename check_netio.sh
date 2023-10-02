@@ -1,9 +1,9 @@
 #!/bin/bash
 ###############################################################
-# Monitoring plugin to check network I/O status
+# Monitoring plugin to check network interface and I/O status
 #
 # Copyright 2007-2008 Ian Yates
-# Copyright 2017-2020 Claudio Kuenzler
+# Copyright 2017-2020,2023 Claudio Kuenzler
 #
 # See usage for command line switches
 #
@@ -23,6 +23,7 @@
 # 2020-02-13 (claudiokuenzler.com) - 1.5.1: Bugfix issue-6
 # 2020-09-04 (claudiokuenzler.com) - 1.5.2: Bugfix issue-9
 # 2020-09-04 (claudiokuenzler.com) - 1.6: Allow regular expression lookup for tcp statistics
+# 2023-10-02 (claudiokuenzler.com) - 1.7: Detect interface operational status, alert when down
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -37,7 +38,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################
-VERSION="1.6.0"
+VERSION="1.7.0"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
@@ -108,8 +109,15 @@ INTERFACES_FULL="`cat /proc/net/dev`"
 
 # Verify that interface exists
 if ! [ -L /sys/class/net/$INTERFACE ]; then
- RESULT="NETIO UNKNOWN - No interface $INTERFACE found"; EXIT_STATUS=3
+ RESULT="CHECK_NETIO UNKNOWN - No interface $INTERFACE found"; EXIT_STATUS=3
  theend
+fi
+
+# Verify that interface is up
+operstate=$(cat /sys/class/net/${INTERFACE}/operstate)
+if ! [[ "${operstate}" = "up" ]]; then
+  RESULT="CHECK_NETIO CRITICAL - Interface ${INTERFACE} is ${operstate}"; EXIT_STATUS=2
+  theend
 fi
 
 if [ $USE_IFCONFIG = true ]; then
@@ -198,26 +206,26 @@ if [ $IFERRORS = true ]; then
     if [[ $ERRORS_RX -gt $PREVIOUS_ERRORS_RX || $ERRORS_TX -gt $PREVIOUS_ERRORS_TX ]]; then 
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
+      RESULT="CHECK_NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors (previous check: $PREVIOUS_ERRORS_RX), $ERRORS_TX Transmit errors (previous check: $PREVIOUS_ERRORS_TX)|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=1
     else
       # output ok with hint that no change in error count
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
+      RESULT="CHECK_NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes - Hint: Previously detected errors (Receive: $PREVIOUS_ERRORS_RX, Transmit: $PREVIOUS_ERRORS_TX) but no change since last check|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=0
     fi
   else # Check if we got errors
     if [[ $ERRORS_RX -gt 0 || $ERRORS_TX -gt 0 ]]; then
       echo "$(date +%s) ERRORS_RX $ERRORS_RX" >> ${ERRORTMPFILE}_${INTERFACE}
       echo "$(date +%s) ERRORS_TX $ERRORS_TX" >> ${ERRORTMPFILE}_${INTERFACE}
-      RESULT="NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
+      RESULT="CHECK_NETIO WARNING - Errors on $INTERFACE: $ERRORS_RX Receive errors, $ERRORS_TX Transmit errors|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=1
     else
-      RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
+      RESULT="CHECK_NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
       EXIT_STATUS=0
     fi
   fi
 else # No error handling, just output the stats
-  RESULT="NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
+  RESULT="CHECK_NETIO OK - $INTERFACE: Receive $BYTES_RX Bytes, Transmit $BYTES_TX Bytes|NET_${INTERFACE}_RX=${BYTES_RX}B;;;; NET_${INTERFACE}_TX=${BYTES_TX}B;;;; NET_${INTERFACE}_ERR_RX=${ERRORS_RX};;;; NET_${INTERFACE}_ERR_TX=${ERRORS_TX};;;; NET_${INTERFACE}_DROP_RX=${DROPS_RX};;;; NET_${INTERFACE}_DROP_TX=${DROPS_TX};;;; ${tcpperfdata[*]}"
   EXIT_STATUS=0
 fi
 
