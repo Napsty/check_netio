@@ -166,12 +166,12 @@ if [ $USE_IFCONFIG = true ]; then
   fi
 else
   # Hurray, we directly parse the /proc/net/dev output and save time
-  BYTES_RX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$2}") 
-  ERRORS_RX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$4}") 
-  DROPS_RX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$5}") 
-  BYTES_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$10}") 
-  ERRORS_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$12}") 
-  DROPS_TX=$( echo "$INTERFACES_FULL" | awk "/${INTERFACE}:/ {print \$13}") 
+  BYTES_RX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$2}") 
+  ERRORS_RX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$4}") 
+  DROPS_RX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$5}") 
+  BYTES_TX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$10}") 
+  ERRORS_TX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$12}") 
+  DROPS_TX=$( echo "$INTERFACES_FULL" | awk "/^\s*${INTERFACE}:/ {print \$13}") 
 fi
 
 # Handle netstat stats
