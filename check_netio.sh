@@ -24,6 +24,7 @@
 # 2020-09-04 (claudiokuenzler.com) - 1.5.2: Bugfix issue-9
 # 2020-09-04 (claudiokuenzler.com) - 1.6: Allow regular expression lookup for tcp statistics
 # 2023-10-02 (claudiokuenzler.com) - 1.7: Detect interface operational status, alert when down
+# 2025-05-21 (sideshowcecil) - 1.7.1: Improve regex in interface lookup
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -38,7 +39,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ###############################################################
-VERSION="1.7.0"
+VERSION="1.7.1"
 
 IFCONFIG=/sbin/ifconfig
 GREP=/bin/grep
