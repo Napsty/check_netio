@@ -4,6 +4,7 @@
 #
 # Copyright 2007-2008 Ian Yates
 # Copyright 2017-2020,2023 Claudio Kuenzler
+# Copyright 2025 sideshowcecil
 #
 # See usage for command line switches
 #
